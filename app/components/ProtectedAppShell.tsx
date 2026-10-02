@@ -53,7 +53,7 @@ export default function ProtectedAppShell({
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-900">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto pt-14 md:pt-0">{children}</main>
     </div>
   );
 }

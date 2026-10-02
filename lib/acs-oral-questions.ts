@@ -1,3 +1,5 @@
+import { ADDITIONAL_ACS_QUESTIONS } from "./acs-oral-expansion";
+
 export type AcsOralQuestion = {
   id: string;
   acsArea: string;
@@ -60,6 +62,7 @@ export const ACS_ORAL_QUESTIONS: AcsOralQuestion[] = [
   q("passenger-briefing", "Flight Deck Management", "PA.II.B.K1", "Passenger briefing", "Give the passenger briefing you would use before a local flight, including normal operations, passenger conduct, propeller safety, and emergencies.", ["Identify the PIC and set passenger expectations", "Cover belts, shoulder harnesses, doors, and exits", "Cover sterile-cockpit and passenger conduct", "Address propeller avoidance and emergency actions"], "Think beyond seat belts: cover the cabin, conduct, hazards outside, and emergencies.", "14 CFR 91.107; FAA-S-ACS-6C PA.II.B.K1 and PA.II.B.S2"),
   q("efb-failure", "Flight Deck Management", "PA.II.B.R1", "Automation and EFB management", "Your tablet overheats and shuts down shortly after departure on a cross-country. Explain how you continue safely and what preflight preparation should have prevented this from becoming an emergency.", ["Maintain aircraft control and situational awareness", "Use current backup navigation information", "Plan power, heat, mounting, and database currency", "Avoid overreliance on a single device", "Land or divert if navigation confidence is inadequate"], "Describe both the immediate response and the redundancy you should have prepared before takeoff.", "AIM; FAA-S-ACS-6C PA.II.B.K3 and PA.II.B.R1"),
   q("loose-cargo", "Flight Deck Management", "PA.II.B.K4", "Cargo and distractions", "Just before takeoff you notice a heavy bag is unsecured behind a passenger and a phone is loose near the rudder pedals. What risks do these create, and how do you correct them?", ["Secure cargo for normal and emergency loads", "Prevent flight-control interference", "Manage passenger belongings before movement", "Delay departure until the flight deck is orderly"], "Consider what each object could do during turbulence, braking, or an abrupt maneuver.", "14 CFR 91.13; FAA-S-ACS-6C PA.II.B.K4 and PA.II.B.R3"),
+  ...ADDITIONAL_ACS_QUESTIONS,
 ];
 
 export function personalizeQuestion(question: AcsOralQuestion, aircraft: string) {

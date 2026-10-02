@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
@@ -32,13 +32,49 @@ function LoginForm() {
   const [status, setStatus] = useState(confirmationFailed ? "That confirmation link is invalid or has expired. Request a new email and try again." : "");
   const [statusTone, setStatusTone] = useState<"error" | "success">("error");
   const [submitting, setSubmitting] = useState(false);
+  const [confirmationHelp, setConfirmationHelp] = useState(confirmationFailed);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const requestInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!loading && user) router.replace(nextPath);
   }, [loading, nextPath, router, user]);
 
+  useEffect(() => {
+    if (!resendCooldown) return;
+    const timer = setTimeout(() => setResendCooldown((remaining) => Math.max(0, remaining - 1)), 1_000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  async function resendConfirmation() {
+    if (requestInFlightRef.current || resendCooldown || !emailInputRef.current?.reportValidity()) return;
+    requestInFlightRef.current = true;
+    setSubmitting(true);
+    setStatus("");
+    setStatusTone("error");
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup", email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/auth/confirmed` },
+      });
+      if (error) setStatus(authErrorMessage(error, "We could not request another confirmation email. Please try again."));
+      else {
+        setStatusTone("success");
+        setStatus("If this address has an unconfirmed account, a new confirmation email has been requested. Check your inbox and spam folder. Already confirmed? Sign in instead.");
+        setResendCooldown(60);
+      }
+    } catch {
+      setStatus("We could not reach the sign-in service. Check your connection and try again.");
+    } finally {
+      requestInFlightRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (requestInFlightRef.current) return;
     setSubmitting(true);
     setStatus("");
     setStatusTone("error");
@@ -49,34 +85,43 @@ function LoginForm() {
       return;
     }
 
-    const authCall = mode === "signin"
-      ? supabase.auth.signInWithPassword({ email, password })
-      : supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=/auth/confirmed`,
-            data: {
-              display_name: displayName.trim(),
-              preferred_aircraft: preferredAircraft,
-              checkride_date: checkrideDate || null,
+    requestInFlightRef.current = true;
+    try {
+      const authCall = mode === "signin"
+        ? supabase.auth.signInWithPassword({ email: email.trim(), password })
+        : supabase.auth.signUp({
+            email: email.trim(),
+            password,
+            options: {
+              emailRedirectTo: `${window.location.origin}/auth/callback?next=/auth/confirmed`,
+              data: {
+                display_name: displayName.trim(),
+                preferred_aircraft: preferredAircraft,
+                checkride_date: checkrideDate || null,
+              },
             },
-          },
-        });
+          });
 
-    const { data, error } = await authCall;
+      const { data, error } = await authCall;
 
-    if (error) {
-      setStatus(authErrorMessage(error, mode === "signin" ? "We could not sign you in. Please try again." : "We could not create your account. Please try again."));
-    } else if (mode === "signup" && !data.session) {
-      setStatusTone("success");
-      setStatus("Account created. Check your email to confirm it, then return to sign in.");
-    } else {
-      router.replace(nextPath);
-      router.refresh();
+      if (error) {
+        setStatus(authErrorMessage(error, mode === "signin" ? "We could not sign you in. Please try again." : "We could not create your account. Please try again."));
+        if (error.code === "email_not_confirmed" || error.message.toLowerCase().includes("email not confirmed")) setConfirmationHelp(true);
+      } else if (mode === "signup" && !data.session) {
+        setStatusTone("success");
+        setConfirmationHelp(true);
+        // Supabase can return success for an existing account to protect privacy.
+        setStatus("If this address needs confirmation, check your inbox and spam folder for a link. If you already registered, sign in or reset your password instead.");
+      } else {
+        router.replace(nextPath);
+        router.refresh();
+      }
+    } catch {
+      setStatus("We could not reach the sign-in service. Check your connection and try again.");
+    } finally {
+      requestInFlightRef.current = false;
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   };
 
   return (
@@ -96,7 +141,7 @@ function LoginForm() {
             </div>
           </Link>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Saved study progress</p>
-          <h1 className="mt-3 max-w-md text-4xl font-bold tracking-tight text-slate-950">
+          <h1 className="font-editorial mt-3 max-w-md text-4xl font-normal leading-tight text-slate-950">
             Keep your preparation tied to one clear plan.
           </h1>
           <p className="mt-5 max-w-md text-base leading-7 text-slate-600">
@@ -162,6 +207,7 @@ function LoginForm() {
               <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">Email</label>
               <input
                 id="email"
+                ref={emailInputRef}
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -201,6 +247,14 @@ function LoginForm() {
 
             <FormStatus message={status} tone={statusTone} />
 
+            {confirmationHelp && <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+              <p>Still waiting for confirmation? Check that the email above is correct, then request another link.</p>
+              <button type="button" onClick={resendConfirmation} disabled={submitting || loading || resendCooldown > 0} className="mt-2 font-semibold text-slate-950 underline disabled:cursor-not-allowed disabled:opacity-50">
+                {resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "Resend confirmation email"}
+              </button>
+              <p className="mt-2">Already registered? <button type="button" disabled={submitting} onClick={() => { setMode("signin"); setStatus(""); setConfirmationHelp(false); }} className="font-semibold text-slate-950 underline">Sign in instead</button> or <Link href="/forgot-password" className="font-semibold text-slate-950 underline">reset your password</Link>.</p>
+            </div>}
+
             <button
               type="submit"
               disabled={submitting || loading}
@@ -217,9 +271,11 @@ function LoginForm() {
 
           <button
             type="button"
+            disabled={submitting}
             onClick={() => {
               setMode((current) => current === "signin" ? "signup" : "signin");
               setStatus("");
+              setConfirmationHelp(false);
             }}
             className="mt-5 w-full text-center text-sm font-medium text-slate-600 transition hover:text-slate-950"
           >

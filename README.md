@@ -60,9 +60,23 @@ npm run lint       # ESLint and React/Next.js rules
 npm test           # Analytics, oral scoring, cost, and profile unit tests
 npm run build      # Optimized production build
 npm run test:e2e   # Desktop and mobile Playwright workflows
+npm run test:e2e:study # Study flows with an isolated local test backend
 ```
 
 Public browser tests cover landing-page navigation, password recovery, protected-route redirects, and unauthorized API access. An optional test account enables the complete authenticated workflow.
+
+Confirmation recovery tests intercept all Auth calls to check existing-account guidance, resend links, cooldowns, and email-delivery errors without creating users or sending email. To test a server you already have running, set `E2E_BASE_URL=http://localhost:3000` when running `npm run test:e2e`.
+
+The isolated study tests exercise daily-plan navigation, exam mistake tracking, practice-save retries after reload, oral draft/follow-up and scorecard recovery, and voice transcript editing and speech-service failures on desktop and mobile. They use a local fixture backend and simulated speech recognition, without a real account or paid AI calls.
+
+## Study workflow
+
+- The dashboard's **Today's study plan** adapts to a 10, 20, 30, or 45 minute budget, question-level mistakes, review intervals, recent oral gaps, and the checkride date.
+- Written exams save individual answers to the same history as practice sets. Missed questions can be reviewed with explanations and opened as an exact retry set.
+- Practice results report failed saves and offer a retry. Reloading the same tab preserves the results and which writes succeeded, so retrying a partially saved set does not repeat acknowledged answer writes. Correcting an exam mistake moves that question out of the immediate review queue.
+- The oral bank contains 60 authored scenarios covering the applicable single-engine land ACS areas, including navigation, emergencies, night operations, and postflight procedures. Sessions remain limited to 5–30 questions.
+- Oral progress is saved per account in this browser's local storage, including drafts, follow-up questions, feedback, and completed scorecards. Reopening the app on the same browser restores the session; cross-device draft synchronization is not included. Failed account saves keep the scorecard available with a retry action.
+- **Dictate answer** uses browser speech recognition where supported. Stop recording, review or edit the text, then submit it through the existing scorer. Browser speech services may process audio online; this app does not upload or store recordings. No additional API key is required. Unsupported browsers retain typed answers.
 
 ## Architecture
 

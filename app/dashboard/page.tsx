@@ -9,6 +9,9 @@ import CheckrideCountdown from "./CheckrideCountdown";
 import OnboardingTour from "./OnboardingTour";
 import { AnimatedDial, CategoryBar, CategoryMasteryTrend, OralSessionHistory, ScoreOverTimeChart, SpacedRepetitionQueue } from "./DashboardWidgets";
 import type { CategoryStat, OralSessionRow, ScoreRow } from "./types";
+import TodayStudyPlan from "./TodayStudyPlan";
+import type { QuestionResult } from "@/lib/study-plan";
+import { readQuestionHistory } from "@/lib/question-history";
 import { ListSkeleton, Skeleton } from "../components/Skeleton";
 
 type InProgressSession = {
@@ -30,6 +33,10 @@ function DashboardContent() {
   const [oralSessions, setOralSessions] = useState<OralSessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [inProgress, setInProgress] = useState<InProgressSession>(null);
+  const [questionResults, setQuestionResults] = useState<QuestionResult[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [checkrideDate, setCheckrideDate] = useState<string | null>(null);
+  const [planUnavailable, setPlanUnavailable] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -54,24 +61,30 @@ function DashboardContent() {
         .order("created_at", { ascending: false });
       if (scoresError) console.error(scoresError);
 
-      const { data: resultsData, error: resultsError } = await supabase
-        .from("question_results")
-        .select("*")
-        .eq("user_id", user.id);
+      const { data: resultsData, error: resultsError } = await readQuestionHistory(supabase, user.id);
       if (resultsError) console.error(resultsError);
 
       const { data: oralData, error: oralError } = await supabase
         .from("oral_sessions")
-        .select("id, created_at, mode, question_count, summary, overall_score, readiness, aircraft_model")
+        .select("id, created_at, mode, question_count, summary, overall_score, readiness, aircraft_model, assessment")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(3);
       if (oralError) console.error(oralError);
 
+      const [profileResult, categoriesResult] = await Promise.all([
+        supabase.from("profiles").select("checkride_date").eq("id", user.id).maybeSingle(),
+        supabase.from("questions").select("category"),
+      ]);
+      setCheckrideDate(profileResult.data?.checkride_date ?? null);
+      setAvailableCategories([...new Set<string>((categoriesResult.data ?? []).map((item) => item.category))]);
+      setPlanUnavailable(Boolean(resultsError || oralError || categoriesResult.error));
+
       if (scoresData) setScores(scoresData);
       if (oralData) setOralSessions(oralData);
 
       if (resultsData) {
+        setQuestionResults(resultsData);
         setTotalAnswered(resultsData.length);
         setCategoryStats(buildCategoryStats(resultsData));
       }
@@ -124,7 +137,7 @@ function DashboardContent() {
   const repetitionQueue = buildSpacedRepetitionQueue(categoryStats);
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-5xl mx-auto">
       <OnboardingTour userId={user.id} />
       {/* Header */}
       <div className="mb-8">
@@ -133,6 +146,8 @@ function DashboardContent() {
       </div>
 
       <CheckrideCountdown userId={user.id} />
+
+      <TodayStudyPlan results={questionResults} categories={availableCategories} oralSessions={oralSessions} checkrideDate={checkrideDate} loading={loading} unavailable={planUnavailable} />
 
       {/* In-progress session banner */}
       {inProgress && (
@@ -170,7 +185,7 @@ function DashboardContent() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-white rounded-lg border border-slate-200 p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Questions Answered</p>
           <p className="text-3xl font-bold text-slate-900">{totalAnswered}</p>

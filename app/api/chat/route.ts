@@ -12,6 +12,7 @@ import {
   oralRequestSchema,
 } from "@/lib/oral-exam";
 import { createClient } from "@/lib/supabase/server";
+import { readQuestionHistory } from "@/lib/question-history";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -37,6 +38,10 @@ function quizCategoryToAcsCode(category: string) {
   if (label.includes("navigation") || label.includes("cross-country")) return "PA.I.D";
   if (label.includes("airworth")) return "PA.I.B";
   if (label.includes("regulation") || label.includes("pilot")) return "PA.I.A";
+  if (label.includes("aerodynamic") || label.includes("stall") || label.includes("spin")) return "PA.VII.A";
+  if (label.includes("emergency")) return "PA.IX.B";
+  if (label.includes("night")) return "PA.XI.A";
+  if (label.includes("communication")) return "PA.III.A";
   return null;
 }
 
@@ -51,10 +56,7 @@ async function loadWeakCodes(
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(8),
-    supabase
-      .from("question_results")
-      .select("category, correct")
-      .eq("user_id", userId),
+    readQuestionHistory(supabase, userId),
   ]);
 
   const codes = new Set<string>();
@@ -111,7 +113,8 @@ export async function POST(request: Request) {
 
   if (parsed.data.action === "start") {
     const weakCodes = await loadWeakCodes(supabase, userId);
-    const questions = selectAcsQuestions(parsed.data.questionCount, parsed.data.sessionKey, weakCodes)
+    const focusCodes = parsed.data.focusCodes?.length ? parsed.data.focusCodes : weakCodes;
+    const questions = selectAcsQuestions(parsed.data.questionCount, parsed.data.sessionKey, focusCodes)
       .map((question) => personalizeQuestion(question, aircraftModel))
       .map(({ id, acsArea, acsCode, topic, prompt, hint, reference }) => ({
         id, acsArea, acsCode, topic, prompt, hint, reference,

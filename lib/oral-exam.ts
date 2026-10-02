@@ -17,6 +17,7 @@ export const oralRequestSchema = z.discriminatedUnion("action", [
     action: z.literal("start"),
     ...requestBase,
     questionCount: z.number().int().min(5).max(30),
+    focusCodes: z.array(z.string().regex(/^PA\.[IVX]+\.[A-Z](?:\.[KRS]\d+[a-z]?)?$/)).max(3).optional(),
   }),
   z.object({
     action: z.literal("evaluate"),

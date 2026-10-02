@@ -52,7 +52,7 @@ function ProductPreview() {
         <div className="border-b border-white/10 px-6 py-7 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Today&apos;s plan</p>
+              <p className="font-editorial text-base text-slate-400">Your next study block</p>
               <p className="mt-2 text-lg font-semibold">Weather and cross-country</p>
             </div>
             <span className="rounded-md bg-emerald-950 px-2.5 py-1 text-xs font-semibold text-emerald-300">VFR</span>
@@ -66,7 +66,7 @@ function ProductPreview() {
 
         <div className="grid md:grid-cols-2">
           <div className="border-b border-white/10 px-6 py-7 md:border-b-0 md:border-r">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Category mastery</p>
+            <p className="font-editorial text-base text-slate-400">Category mastery</p>
             <div className="mt-5 space-y-4">
               {[
                 ["Weather", "74%"],
@@ -87,7 +87,7 @@ function ProductPreview() {
           </div>
 
           <div className="px-6 py-7">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">AI oral examiner</p>
+            <p className="font-editorial text-base text-slate-400">AI oral examiner</p>
             <p className="mt-5 text-base font-medium leading-7 text-slate-100">
               Tell me how you would evaluate ceilings and visibility before a short cross-country in your aircraft.
             </p>
@@ -115,9 +115,9 @@ export default function LandingPage() {
             </div>
           </nav>
 
-          <div className="max-w-4xl py-16 md:py-20">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">Written and oral checkride preparation</p>
-            <h1 className="mt-5 max-w-3xl text-5xl font-bold leading-[1.04] text-slate-950 md:text-6xl">Private Pilot Prep Designed for You.</h1>
+          <div className="max-w-5xl py-16 md:py-20">
+            <p className="font-editorial text-xl leading-7 text-emerald-900">Prepare for both sides of the checkride.</p>
+            <h1 className="font-editorial mt-5 max-w-5xl text-5xl font-normal leading-[1.06] text-slate-950 md:text-6xl">Private Pilot Prep Designed for You.</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
               Practice FAA-style questions, rehearse oral scenarios with an adaptive examiner, and use your results to decide what deserves another pass.
             </p>
@@ -133,15 +133,15 @@ export default function LandingPage() {
       <section className="border-b border-slate-300">
         <div className="mx-auto max-w-6xl px-6 py-16">
           <div className="grid gap-6 border-b border-slate-300 pb-8 md:grid-cols-[0.72fr_1.28fr]">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">What you can do</p>
-            <h2 className="max-w-2xl text-3xl font-bold leading-tight">One record of your preparation, from the first practice set through the oral rehearsal.</h2>
+            <p className="font-editorial text-xl leading-7 text-slate-700">A complete preparation loop.</p>
+            <h2 className="font-editorial max-w-3xl text-4xl font-normal leading-tight">One record of your preparation, from the first practice set through the oral rehearsal.</h2>
           </div>
           <div>
             {features.map((feature) => (
               <article key={feature.number} className="grid gap-4 border-b border-slate-300 py-7 md:grid-cols-[0.18fr_0.55fr_1.27fr] md:items-start">
                 <span className="text-xs font-bold text-emerald-800">{feature.number}</span>
                 <div>
-                  <h3 className="text-base font-bold">{feature.label}</h3>
+                  <h3 className="font-editorial text-xl font-normal leading-7">{feature.label}</h3>
                   <p className="mt-1 text-xs font-semibold text-slate-500">{feature.proof}</p>
                 </div>
                 <p className="max-w-2xl text-sm leading-7 text-slate-600">{feature.detail}</p>

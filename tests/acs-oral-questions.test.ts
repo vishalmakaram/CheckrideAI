@@ -8,13 +8,23 @@ import {
 } from "../lib/acs-oral-questions.ts";
 
 test("ACS bank has unique questions with scoring rubrics and official mappings", () => {
-  assert.equal(ACS_ORAL_QUESTIONS.length, 30);
-  assert.equal(new Set(ACS_ORAL_QUESTIONS.map((question) => question.id)).size, 30);
+  assert.equal(ACS_ORAL_QUESTIONS.length, 60);
+  assert.equal(new Set(ACS_ORAL_QUESTIONS.map((question) => question.id)).size, ACS_ORAL_QUESTIONS.length);
   for (const question of ACS_ORAL_QUESTIONS) {
     assert.match(question.acsCode, /^PA\./);
     assert.ok(question.rubric.length >= 3);
     assert.match(question.reference, /FAA-S-ACS-6C/);
   }
+});
+
+test("expanded bank covers the applicable single-engine land operations beyond preflight", () => {
+  const operations = new Set(ACS_ORAL_QUESTIONS.map((question) => question.acsCode.split(".")[1]));
+  for (const operation of ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "XI", "XII"]) {
+    assert.ok(operations.has(operation), `Missing operation ${operation}`);
+  }
+  const fullSession = selectAcsQuestions(30, "expanded-session");
+  assert.equal(fullSession.length, 30);
+  assert.equal(new Set(fullSession.map((question) => question.id)).size, 30);
 });
 
 test("selector returns a deterministic, unique, broad session", () => {

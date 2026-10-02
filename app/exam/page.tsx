@@ -7,6 +7,8 @@ import { ArrowLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "../components/AuthProvider";
 import ProtectedAppShell from "../components/ProtectedAppShell";
+import { practiceLink } from "@/lib/study-plan";
+import { saveExamAttempt, type SaveProgress } from "@/lib/quiz-attempt";
 
 type Question = {
   id: string;
@@ -44,6 +46,11 @@ function ExamPageContent() {
   const [score, setScore] = useState(0);
   const [questionNavOpen, setQuestionNavOpen] = useState(true);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submittedRef = useRef(false);
+  const savingRef = useRef(false);
+  const sessionIdRef = useRef("");
+  const saveProgressRef = useRef<SaveProgress>({ resultsSaved: false, scoreSaved: false });
+  const [saveError, setSaveError] = useState("");
 
   const toggleFlag = (i: number) => {
     setFlagged((prev) => {
@@ -57,22 +64,30 @@ function ExamPageContent() {
     });
   };
 
+  const persistExam = useCallback(async (finalAnswers: Record<number, string>, qs: Question[]) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+    setSaveError("");
+    try {
+      await saveExamAttempt(supabase, qs, finalAnswers, user.id, sessionIdRef.current, saveProgressRef.current);
+    } catch (caught) {
+      setSaveError(caught instanceof Error ? caught.message : "Your exam could not be saved. Please retry.");
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
+  }, [user.id]);
+
   const submitExam = useCallback(async (finalAnswers: Record<number, string>, qs: Question[]) => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
     const finalScore = qs.reduce((acc, q, i) => finalAnswers[i] === q.correct_answer ? acc + 1 : acc, 0);
     setScore(finalScore);
     setScreen("results");
-    setIsSaving(true);
-
-    await supabase.from("quiz_scores").insert([{
-      score: finalScore,
-      total_questions: qs.length,
-      category: "Practice Exam",
-      user_id: user.id,
-    }]);
-
-    setIsSaving(false);
-  }, [user.id]);
+    await persistExam(finalAnswers, qs);
+  }, [persistExam]);
 
   useEffect(() => {
     if (screen !== "exam") return;
@@ -102,6 +117,10 @@ function ExamPageContent() {
     });
     setOptionOrders(orders);
     setAnswers({});
+    sessionIdRef.current = crypto.randomUUID();
+    submittedRef.current = false;
+    saveProgressRef.current = { resultsSaved: false, scoreSaved: false };
+    setSaveError("");
     setFlagged(new Set());
     setCurrentIndex(0);
     setTimeLeft(EXAM_DURATION);
@@ -110,7 +129,6 @@ function ExamPageContent() {
   };
 
   const handleAnswer = (opt: string) => {
-    if (answers[currentIndex] !== undefined) return;
     setAnswers((prev) => ({ ...prev, [currentIndex]: opt }));
   };
 
@@ -220,19 +238,45 @@ function ExamPageContent() {
 
           {isSaving ? (
             <p className="text-xs text-center text-slate-400 mb-4">Saving score...</p>
+          ) : saveError ? (
+            <div role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+              <p>{saveError}</p>
+              <button type="button" onClick={() => persistExam(answers, questions)} className="mt-2 font-semibold underline">Retry saving</button>
+            </div>
           ) : (
-            <p className="text-xs text-center text-green-600 font-medium mb-4">Score saved to dashboard</p>
+            <p className="text-xs text-center text-green-600 font-medium mb-4">Score and answers saved to your study history</p>
+          )}
+
+          {missed.length > 0 && (
+            <section className="mb-6 border-t border-slate-100 pt-5" aria-labelledby="missed-questions-title">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 id="missed-questions-title" className="text-sm font-bold text-slate-900">Review your missed questions</h2>
+                <Link href={practiceLink({ questionIds: missed.map((item) => item.id), count: missed.length })} className="rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Practise missed questions</Link>
+              </div>
+              <div className="space-y-3">
+                {questions.map((item, index) => answers[index] !== item.correct_answer && (
+                  <details key={item.id} className="rounded-lg border border-slate-200 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-800">Q{index + 1}: {item.question_text}</summary>
+                    <p className="mt-3 text-xs text-slate-500">Your answer: {item[answers[index] as "option_a" | "option_b" | "option_c"] ?? "Unanswered"}</p>
+                    <p className="mt-2 text-sm font-semibold text-emerald-800">Correct answer: {item[item.correct_answer as "option_a" | "option_b" | "option_c"]}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{item.explanation}</p>
+                  </details>
+                ))}
+              </div>
+            </section>
           )}
 
           <div className="flex gap-3">
             <button
               onClick={() => { setScreen("intro"); setAnswers({}); setQuestions([]); }}
+              disabled={isSaving}
               className="flex-1 border border-slate-200 text-slate-700 font-medium py-2.5 rounded-lg hover:bg-slate-50 transition text-sm"
             >
               Back
             </button>
             <button
               onClick={startExam}
+              disabled={isSaving || loading}
               className="flex-1 bg-slate-950 text-white font-semibold py-2.5 rounded-lg hover:bg-slate-800 transition text-sm"
             >
               Retake Exam
@@ -381,12 +425,9 @@ function ExamPageContent() {
                   <button
                     key={opt}
                     onClick={() => handleAnswer(opt)}
-                    disabled={answers[currentIndex] !== undefined}
                     className={`w-full p-4 border-2 rounded-lg text-left transition-colors text-sm ${
                       isSelected
                         ? "border-emerald-600 bg-emerald-50 text-emerald-950"
-                        : answers[currentIndex] !== undefined
-                        ? "border-slate-200 text-slate-400 cursor-default"
                         : "border-slate-200 hover:border-emerald-400 hover:bg-slate-50 text-slate-700"
                     }`}
                   >

@@ -34,4 +34,5 @@ export type OralSessionRow = {
   overall_score: number | null;
   readiness: string | null;
   aircraft_model: string | null;
+  assessment?: { areasToReview?: { acsCode: string; acsArea: string }[] } | null;
 };

@@ -81,6 +81,12 @@ For a hosted Supabase project:
 
 Both templates use Supabase's `{{ .ConfirmationURL }}` variable. The application supplies the destination through `emailRedirectTo` or `redirectTo`, and `/auth/callback` exchanges the returned code for a cookie-backed session.
 
+### Confirmation recovery
+
+Signup responses do not always disclose whether an email already belongs to an account. The app therefore gives conditional confirmation instructions and links to sign-in and password reset, rather than claiming a new account was created. Pending signups, unconfirmed sign-ins, and expired confirmation links offer **Resend confirmation email** with a 60-second cooldown and explicit delivery-error messages.
+
+When investigating a missing email, check **Authentication > Users** first. An account with a **Confirmed at** timestamp should sign in or reset its password instead of repeating signup. For unconfirmed accounts, check Auth logs and the SMTP provider's delivery records.
+
 ### Branded Sender
 
 Supabase's built-in SMTP service is for development. For production delivery:

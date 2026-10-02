@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { useAuth } from "../components/AuthProvider";
+import { useAuth, useAuthState } from "../components/AuthProvider";
 import ProtectedAppShell from "../components/ProtectedAppShell";
 import { ListSkeleton, Skeleton } from "../components/Skeleton";
+import { saveQuizAttempt, type SaveProgress } from "@/lib/quiz-attempt";
 
 type Question = {
   id: string;
@@ -25,9 +26,14 @@ type Question = {
 function PracticeQuizContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const practiceSessionKey = `practice_session:${user.id}`;
-  const sessionRestoredRef = useRef(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const handledParamsRef = useRef("");
+  const savingRef = useRef(false);
+  const finishedRef = useRef(false);
+  const sessionIdRef = useRef("");
+  const saveProgressRef = useRef<SaveProgress>({ resultsSaved: false, scoreSaved: false });
   const [screen, setScreen] = useState<"select" | "quiz" | "results">("select");
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -36,10 +42,14 @@ function PracticeQuizContent() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [score, setScore] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving-score" | "saved" | "failed">("idle");
+  const [saveError, setSaveError] = useState("");
+  const [storageError, setStorageError] = useState("");
   const [loading, setLoading] = useState(true);
   const [questionCount, setQuestionCount] = useState(20);
   const [optionOrders, setOptionOrders] = useState<Record<number, ("option_a" | "option_b" | "option_c")[]>>({});
   const [questionNavOpen, setQuestionNavOpen] = useState(true);
+  const [startError, setStartError] = useState("");
 
   // Restore session from sessionStorage after mount (client-only)
   useEffect(() => {
@@ -56,24 +66,33 @@ function PracticeQuizContent() {
           if (s.score !== undefined) setScore(s.score);
           if (s.questionCount) setQuestionCount(s.questionCount);
           if (s.optionOrders) setOptionOrders(s.optionOrders);
+          sessionIdRef.current = typeof s.sessionId === "string" && s.sessionId ? s.sessionId : crypto.randomUUID();
+          saveProgressRef.current = { resultsSaved: s.saveProgress?.resultsSaved === true, scoreSaved: s.saveProgress?.scoreSaved === true };
+          if (s.screen === "results") {
+            finishedRef.current = true;
+            setSaveStatus(saveProgressRef.current.resultsSaved && saveProgressRef.current.scoreSaved ? "saved" : "failed");
+          }
         }
-      } catch { /* ignore */ }
-      sessionRestoredRef.current = true;
+      } catch { setStorageError("Browser storage is unavailable. Keep this tab open to preserve your practice set."); }
+      setSessionReady(true);
     });
   }, [practiceSessionKey]);
 
   // Persist session state to sessionStorage whenever it changes
   useEffect(() => {
-    if (!sessionRestoredRef.current) return;
-    sessionStorage.setItem(practiceSessionKey, JSON.stringify({
-      screen, selectedCategories, questions, currentIndex, answers, score, questionCount, optionOrders,
-    }));
-  }, [practiceSessionKey, screen, selectedCategories, questions, currentIndex, answers, score, questionCount, optionOrders]);
+    if (!sessionReady) return;
+    try {
+      sessionStorage.setItem(practiceSessionKey, JSON.stringify({
+        screen, selectedCategories, questions, currentIndex, answers, score, questionCount, optionOrders,
+        sessionId: sessionIdRef.current, saveProgress: saveProgressRef.current, saveStatus,
+      }));
+    } catch { setStorageError("Your browser could not save this practice set. Keep this tab open to preserve your work."); }
+  }, [sessionReady, practiceSessionKey, screen, selectedCategories, questions, currentIndex, answers, score, questionCount, optionOrders, saveStatus]);
 
   useEffect(() => {
     const fetchCategories = async () => {
       const { data, error } = await supabase.from("questions").select("category");
-      if (error) { console.error(error); return; }
+      if (error) { setStartError("Question categories could not be loaded. Refresh to try again."); setLoading(false); return; }
       const unique = [...new Set(data.map((q) => q.category))];
       setCategories(unique);
       setLoading(false);
@@ -87,15 +106,19 @@ function PracticeQuizContent() {
     );
   };
 
-  const startQuiz = useCallback(async (overrideCategories?: string[]) => {
+  const startQuiz = useCallback(async (overrideCategories?: string[], options?: { questionIds?: string[]; count?: number }) => {
     const cats = overrideCategories ?? selectedCategories;
-    const { data, error } = await supabase
-      .from("questions")
-      .select("*")
-      .in("category", cats);
-    if (error || !data || data.length === 0) { console.error(error); return; }
-    const shuffled = data.sort(() => Math.random() - 0.5).slice(0, questionCount);
+    setStartError("");
+    let query = supabase.from("questions").select("*");
+    if (options?.questionIds?.length) query = query.in("id", options.questionIds);
+    else query = query.in("category", cats);
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) { setStartError("These questions are unavailable. Choose another practice set or retry."); return; }
+    const count = options?.count ?? questionCount;
+    const shuffled = data.sort(() => Math.random() - 0.5).slice(0, count);
     setQuestions(shuffled);
+    setQuestionCount(count);
+    setSelectedCategories([...new Set<string>(shuffled.map((item) => item.category))]);
 
     // Builds a shuffled option order for each question
     const orders: Record<number, ("option_a" | "option_b" | "option_c")[]> = {};
@@ -108,67 +131,76 @@ function PracticeQuizContent() {
     setCurrentIndex(0);
     setAnswers({});
     setScore(0);
+    sessionIdRef.current = crypto.randomUUID();
+    saveProgressRef.current = { resultsSaved: false, scoreSaved: false };
+    finishedRef.current = false;
+    setSaveStatus("idle");
+    setSaveError("");
     setScreen("quiz");
-  }, [selectedCategories, questionCount]);
+    // Consume the start link. Reload resumes this set; opening a new start
+    // link later can create another set with the same category and count.
+    router.replace("/practice", { scroll: false });
+  }, [selectedCategories, questionCount, router]);
 
   // Handle URL params: ?categories=X,Y&autostart=true
   useEffect(() => {
+    if (!sessionReady) return;
     const cats = searchParams.get("categories");
+    const questionIds = searchParams.get("questionIds")?.split(",").filter(Boolean).slice(0, 100);
     const autostart = searchParams.get("autostart");
     const paramsKey = searchParams.toString();
-    if (cats && handledParamsRef.current !== paramsKey) {
+    if (!paramsKey) { handledParamsRef.current = ""; return; }
+    if ((cats || questionIds?.length) && handledParamsRef.current !== paramsKey) {
       handledParamsRef.current = paramsKey;
-      const parsed = cats.split(",").map((c) => c.trim()).filter(Boolean);
+      const parsed = (cats ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+      const requestedCount = Number(searchParams.get("count"));
+      const count = Number.isInteger(requestedCount) && requestedCount >= 1 && requestedCount <= 100 ? requestedCount : undefined;
       queueMicrotask(() => {
         if (autostart === "true") {
-          sessionStorage.removeItem(practiceSessionKey);
+          try { sessionStorage.removeItem(practiceSessionKey); } catch { /* In-memory practice still works. */ }
           setScreen("select");
         }
         setSelectedCategories(parsed);
-        if (autostart === "true") void startQuiz(parsed);
+        if (autostart === "true") void startQuiz(parsed, { questionIds, count });
       });
     }
-  }, [practiceSessionKey, searchParams, startQuiz]);
+  }, [sessionReady, practiceSessionKey, searchParams, startQuiz]);
 
   const handleAnswer = (answer: string) => {
     if (answers[currentIndex] !== undefined) return;
     setAnswers((prev) => ({ ...prev, [currentIndex]: answer }));
   };
 
+  const persistPractice = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+    setSaveStatus("pending");
+    setSaveError("");
+    try {
+      await saveQuizAttempt(supabase, questions, answers, user.id, sessionIdRef.current, saveProgressRef.current, selectedCategories.join(", "), () => {
+        // Persist acknowledged answers before waiting for the score write.
+        setSaveStatus(saveProgressRef.current.scoreSaved ? "saved" : "saving-score");
+      });
+      setSaveStatus("saved");
+    } catch (caught) {
+      setSaveStatus("failed");
+      setSaveError(caught instanceof Error ? caught.message : "Your practice set could not be saved. Please retry.");
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
+  };
+
   const handleFinish = async () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
     const finalScore = questions.reduce((acc, q, i) => {
       return answers[i] === q.correct_answer ? acc + 1 : acc;
     }, 0);
     setScore(finalScore);
     setScreen("results");
-    setIsSaving(true);
-
-    const sessionId = `session_${Date.now()}`;
-
-    const { error: scoreError } = await supabase
-      .from("quiz_scores")
-      .insert([{
-        score: finalScore,
-        total_questions: questions.length,
-        category: selectedCategories.join(", "),
-        user_id: user.id,
-    }]);
-    if (scoreError) console.error(scoreError);
-
-    const questionResults = questions.map((q, i) => ({
-      question_id: q.id,
-      category: q.category,
-      correct: answers[i] === q.correct_answer,
-      session_id: sessionId,
-      user_id: user.id,
-    }));
-
-    const { error: resultsError } = await supabase
-      .from("question_results")
-      .insert(questionResults);
-    if (resultsError) console.error(resultsError);
-
-    setIsSaving(false);
+    await persistPractice();
   };
 
   const question = questions[currentIndex];
@@ -237,6 +269,7 @@ function PracticeQuizContent() {
           )}
 
           {/* Question Count Slider */}
+          {startError && <p role="alert" className="mb-4 text-sm text-rose-700">{startError}</p>}
           <div className="mb-8">
             <div className="flex justify-between items-center mb-2">
               <label className="text-sm font-bold text-slate-700">Number of Questions</label>
@@ -287,13 +320,18 @@ function PracticeQuizContent() {
             <span className="text-2xl text-slate-400 font-bold"> / {questions.length}</span>
           </div>
           {isSaving ? (
-            <p className="text-sm font-bold text-amber-500 animate-pulse mb-6">Saving score...</p>
-          ) : (
-            <p className="text-sm font-bold text-green-500 mb-6">Score saved!</p>
-          )}
+            <p role="status" className="text-sm font-bold text-amber-700 animate-pulse mb-6">Saving score and answers...</p>
+          ) : saveStatus === "saved" ? (
+            <p role="status" className="text-sm font-bold text-emerald-700 mb-6">Score and answers saved to your study history.</p>
+          ) : <div role="alert" className="mb-6 text-sm text-rose-700">
+            <p>{saveError || "This practice set has not finished saving. Retry to update your study history."}</p>
+            <button type="button" onClick={persistPractice} className="mt-2 font-semibold underline">Retry saving practice</button>
+          </div>}
+          {storageError && <p role="status" className="mb-4 text-sm text-amber-800">{storageError}</p>}
           <button
-            onClick={() => { sessionStorage.removeItem(practiceSessionKey); setScreen("select"); setQuestions([]); setAnswers({}); setCurrentIndex(0); setScore(0); }}
-            className="w-full bg-slate-950 text-white px-6 py-3 rounded-lg hover:bg-slate-800 font-semibold transition"
+            onClick={() => { try { sessionStorage.removeItem(practiceSessionKey); } catch { /* In-memory reset still works. */ } setScreen("select"); setQuestions([]); setAnswers({}); setCurrentIndex(0); setScore(0); }}
+            disabled={isSaving}
+            className="w-full bg-slate-950 text-white px-6 py-3 rounded-lg hover:bg-slate-800 font-semibold transition disabled:opacity-50"
           >
             Practice Again
           </button>
@@ -459,10 +497,11 @@ function PracticeQuizContent() {
 }
 
 export default function PracticeQuiz() {
+  const { user } = useAuthState();
   return (
     <ProtectedAppShell focus>
       <Suspense fallback={<div className="mx-auto max-w-4xl p-8"><Skeleton className="h-7 w-48" /><div className="mt-8 border-y border-slate-300 py-2"><ListSkeleton rows={6} /></div></div>}>
-        <PracticeQuizContent />
+        <PracticeQuizContent key={user?.id} />
       </Suspense>
     </ProtectedAppShell>
   );

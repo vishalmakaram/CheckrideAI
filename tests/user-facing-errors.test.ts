@@ -8,6 +8,13 @@ test("auth errors are translated into useful product copy", () => {
   assert.equal(authErrorMessage({ message: "User already registered" }), "An account with this email already exists. Try signing in instead.");
 });
 
+test("confirmation-email errors explain delivery failures without exposing provider details", () => {
+  assert.equal(authErrorMessage({ code: "email_not_confirmed" }), "Confirm your email before signing in.");
+  assert.match(authErrorMessage({ code: "email_address_not_authorized" }), /email service needs to be configured/);
+  assert.match(authErrorMessage({ code: "over_email_send_rate_limit" }), /sending limit/);
+  assert.match(authErrorMessage({ message: "Error sending confirmation email" }), /could not send your link/);
+});
+
 test("unknown provider details are not exposed", () => {
   const raw = "column profiles.onboarding_completed does not exist";
   assert.equal(authErrorMessage({ message: raw }), "We could not complete that request. Please try again.");

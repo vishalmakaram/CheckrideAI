@@ -19,8 +19,12 @@ export function isMissingDatabaseColumn(error: unknown, column?: string) {
 }
 
 export function authErrorMessage(error: unknown, fallback = "We could not complete that request. Please try again.") {
-  const { message } = errorDetails(error);
+  const { code, message } = errorDetails(error);
 
+  if (code === "email_address_not_authorized") return "Confirmation emails cannot be sent to this address right now. The app's email service needs to be configured.";
+  if (code === "over_email_send_rate_limit") return "The email service has reached its sending limit. Wait and try again later.";
+  if (code === "email_not_confirmed") return "Confirm your email before signing in.";
+  if (message.includes("error sending confirmation email") || message.includes("error sending recovery email")) return "The email service could not send your link. Try again later.";
   if (message.includes("invalid login credentials")) return "The email or password is incorrect.";
   if (message.includes("email not confirmed")) return "Confirm your email before signing in.";
   if (message.includes("user already registered") || message.includes("already been registered")) return "An account with this email already exists. Try signing in instead.";
