@@ -78,7 +78,7 @@ export type OralAssessment = z.infer<typeof oralAssessmentSchema>;
 
 export function buildEvaluationSystemPrompt(mode: OralMode, aircraftModel: string) {
   const feedbackRule = mode === "checkride"
-    ? "Write feedback for the final scorecard, not as conversational coaching."
+    ? "Give concise examiner-style feedback on this answer, including the most important correction."
     : mode === "beginner"
       ? "Give one encouraging sentence and one concrete correction or improvement."
       : "Give no more than two concise sentences of direct feedback.";

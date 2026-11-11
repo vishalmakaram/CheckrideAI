@@ -52,3 +52,13 @@ test("oral recovery rejects duplicate questions and feedback without a recorded 
   assert.equal(restoreOralSession(JSON.stringify({ ...saved, questions: [question, question] }), "pilot-a"), null);
   assert.equal(restoreOralSession(JSON.stringify({ ...saved, feedbackVisible: true }), "pilot-a"), null);
 });
+
+test("initial feedback is recovered with its follow-up without counting the answer twice", () => {
+  const pendingEvaluation = { ...evaluation, score: 55, verdict: "partial" as const, needsFollowUp: true, followUpQuestion: saved.followUpQuestion };
+  const restored = restoreOralSession(JSON.stringify({ ...saved, pendingEvaluation, feedbackVisible: true }), "pilot-a");
+  assert.equal(restored?.pendingEvaluation?.score, 55);
+  assert.equal(restored?.followUpQuestion, saved.followUpQuestion);
+  assert.equal(restored?.entries.length, 0);
+  assert.equal(restoreOralSession(JSON.stringify({ ...saved, pendingEvaluation: { ...pendingEvaluation, questionId: "unrelated" } }), "pilot-a"), null);
+  assert.equal(restoreOralSession(JSON.stringify({ ...saved, pendingEvaluation: { ...pendingEvaluation, followUpQuestion: "Unrelated follow-up" } }), "pilot-a"), null);
+});

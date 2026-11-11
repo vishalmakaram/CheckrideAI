@@ -25,7 +25,7 @@ export default function Sidebar() {
     <>
     <button type="button" onClick={() => setMobileOpen((open) => !open)} aria-label={mobileOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileOpen} aria-controls="study-navigation" className="fixed left-3 top-3 z-50 rounded-lg border border-slate-200 bg-white p-2 text-slate-800 shadow-sm md:hidden">{mobileOpen ? <X size={20} /> : <Menu size={20} />}</button>
     {mobileOpen && <button type="button" aria-label="Close navigation overlay" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-slate-950/40 md:hidden" />}
-    <nav id="study-navigation" aria-label="Study navigation" onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setMobileOpen(false); }} className={`${mobileOpen ? "fixed inset-y-0 left-0 z-40 flex pt-14" : "hidden"} w-60 shrink-0 flex-col overflow-y-auto border-r border-white/5 md:static md:flex md:pt-0`} style={{ backgroundColor: "#0d1117" }}>
+    <nav id="study-navigation" aria-label="Study navigation" onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setMobileOpen(false); }} className={`${mobileOpen ? "fixed inset-y-0 left-0 z-40 flex pt-14" : "hidden"} w-60 shrink-0 flex-col overflow-y-auto border-r border-white/5 md:sticky md:top-0 md:flex md:h-dvh md:pt-0`} style={{ backgroundColor: "#0d1117" }}>
       {/* Logo */}
       <div className="border-b border-white/5 px-4 py-4">
         <Link href="/dashboard" aria-label="CheckrideAI dashboard" className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition hover:bg-white/8">

@@ -14,12 +14,12 @@ test.beforeEach(async ({ context, request }) => {
   await context.addCookies([{ name: "sb-127-auth-token", value: `base64-${encode(session)}`, domain: "127.0.0.1", path: "/", sameSite: "Lax" }]);
 });
 
-async function seedOral(page: Page) {
+async function seedOral(page: Page, mode: "beginner" | "intermediate" | "checkride" = "intermediate") {
   await page.goto("/oral");
   await expect(page.getByRole("button", { name: "Begin oral practice" })).toBeVisible();
   await page.evaluate(({ key, saved }) => localStorage.setItem(key, JSON.stringify(saved)), { key: storageKey, saved: {
-    version: 3, userId, screen: "exam", mode: "intermediate", questionCount: 5,
-    questions: Array.from({ length: 5 }, (_, index) => ({ ...question, id: index ? `next-${index}` : question.id })), entries: [], sessionKey, aircraftModel: "Cessna 172S", assessment: null,
+    version: 3, userId, screen: "exam", mode, questionCount: 5,
+    questions: Array.from({ length: 5 }, (_, index) => ({ ...question, id: index ? `next-${index}` : question.id, prompt: index ? `Explain your next decision ${index + 1}.` : question.prompt })), entries: [], sessionKey, aircraftModel: "Cessna 172S", assessment: null,
     input: "My draft answer", originalAnswer: "My original explanation", followUpQuestion: "When would you divert?", hintVisible: false, feedbackVisible: false, scoringFailed: false, saveStatus: "idle",
   } });
   await page.reload();
@@ -81,11 +81,13 @@ test("a failed final save leaves the scorecard visible and can be retried after 
     if (route.request().method() === "POST") await route.fulfill({ status: 503, json: { message: "Offline" } });
     else await route.continue();
   });
-  await page.getByRole("button", { name: "Submit answer" }).click();
+  await page.getByRole("button", { name: "Score answer" }).click();
   await expect(page.getByRole("heading", { name: "Oral practice scorecard" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Feedback on question 5", exact: true }).getByText("90/100", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Retry saving scorecard" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Oral practice scorecard" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Feedback on question 5", exact: true }).getByText("90/100", { exact: true })).toBeVisible();
   await page.unroute("**/rest/v1/oral_sessions*");
   await page.getByRole("button", { name: "Retry saving scorecard" }).click();
   await expect(page.getByText("Scorecard saved to your account.")).toBeVisible();
@@ -105,10 +107,10 @@ test("voice dictation fills an editable transcript without submitting it", async
   await seedOral(page);
   await page.getByRole("button", { name: "Dictate answer" }).click();
   await expect(page.getByLabel("Your answer")).toHaveValue("My draft answer I would divert early.");
-  await expect(page.getByRole("button", { name: "Submit answer" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Score answer" })).toBeDisabled();
   await page.getByRole("button", { name: "Stop dictation" }).click();
   await page.getByLabel("Your answer").fill("My reviewed explanation.");
-  await expect(page.getByRole("button", { name: "Submit answer" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Score answer" })).toBeEnabled();
 });
 
 test("denied microphone permission keeps the draft and typed answers usable", async ({ page }) => {
@@ -124,7 +126,7 @@ test("denied microphone permission keeps the draft and typed answers usable", as
   await page.getByRole("button", { name: "Dictate answer" }).click();
   await expect(page.getByText(/Microphone access was denied/)).toBeVisible();
   await expect(page.getByLabel("Your answer")).toHaveValue("My draft answer");
-  await expect(page.getByRole("button", { name: "Submit answer" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Score answer" })).toBeEnabled();
 });
 
 for (const failure of ["constructor", "start", "stop"] as const) {
@@ -149,7 +151,7 @@ for (const failure of ["constructor", "start", "stop"] as const) {
       await page.getByRole("button", { name: "Stop dictation" }).click();
     }
     await expect(page.getByRole("button", { name: "Dictate answer" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Submit answer" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Score answer" })).toBeEnabled();
     await page.getByLabel("Your answer").fill("My reviewed answer.");
     await expect(page.getByLabel("Your answer")).toHaveValue("My reviewed answer.");
   });
@@ -189,20 +191,83 @@ test("practice save retries survive reload during saving without repeating saved
   await expect(page.getByRole("button", { name: /Correct choice/ })).toBeEnabled();
 });
 
-test("oral feedback stays with the answered question across reload", async ({ page }, testInfo) => {
+for (const mode of ["beginner", "intermediate", "checkride"] as const) {
+  test(`${mode} oral feedback appears with the next question and survives reload`, async ({ page }, testInfo) => {
+    await seedOral(page, mode);
+    await page.route("**/api/chat", async (route) => route.fulfill({ json: { evaluation: { ...question, questionId: route.request().postDataJSON().questionId, answer: "Draft", score: 90, verdict: "strong", feedback: "Sound reasoning", demonstrated: ["You chose an early diversion."], missing: ["Explain the fuel margin."], needsFollowUp: false, followUpQuestion: null, scored: true } } }));
+    await page.getByRole("button", { name: "Score answer", exact: true }).click();
+    const feedback = page.getByRole("region", { name: "Feedback on question 1", exact: true });
+    await expect(feedback.getByText("90/100", { exact: true })).toBeVisible();
+    await expect(feedback.getByText("Sound reasoning", { exact: true })).toBeVisible();
+    await expect(feedback.getByText("You chose an early diversion.")).toBeVisible();
+    await expect(feedback.getByText("Explain the fuel margin.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Explain your next decision 2.", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Your answer", { exact: true })).toBeEditable();
+    await page.getByLabel("Your answer", { exact: true }).fill("My next answer draft.");
+    await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).input, storageKey)).toBe("My next answer draft.");
+    await page.reload();
+    await expect(page.getByLabel("Your answer", { exact: true })).toHaveValue("My next answer draft.", { timeout: 15_000 });
+    await expect(feedback.getByText("90/100", { exact: true })).toBeVisible();
+    await feedback.getByText("Your answer", { exact: true }).click();
+    await expect(feedback.getByText(/My original explanation/)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("oral-feedback.png"), fullPage: true });
+    await page.getByRole("button", { name: "Score answer", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Feedback on question 2", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Explain your next decision 3.", exact: true })).toBeVisible();
+    await expect(feedback).toHaveCount(0);
+  });
+}
+
+test("initial oral feedback survives reload and is replaced by the follow-up score", async ({ page }) => {
   await seedOral(page);
-  await page.route("**/api/chat", async (route) => route.fulfill({ json: { evaluation: { ...question, questionId: question.id, answer: "Draft", score: 90, verdict: "strong", feedback: "Sound reasoning", demonstrated: [], missing: [], needsFollowUp: false, followUpQuestion: null, scored: true } } }));
-  await page.getByRole("button", { name: "Submit answer" }).click();
-  await expect(page.getByRole("button", { name: "Next question" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: question.prompt })).toBeVisible();
-  await expect(page.getByText("Question 1 of 5", { exact: true })).toBeVisible();
+  await page.evaluate((key) => { const saved = JSON.parse(localStorage.getItem(key)!); saved.originalAnswer = null; saved.followUpQuestion = null; localStorage.setItem(key, JSON.stringify(saved)); }, storageKey);
   await page.reload();
-  await expect(page.getByRole("heading", { name: question.prompt })).toBeVisible();
-  await expect(page.getByText(/Your answer: My original explanation/)).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("oral-feedback.png"), fullPage: true });
-  await page.getByRole("button", { name: "Next question" }).click();
-  await expect(page.getByText("Question 2 of 5", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Your answer")).toBeEditable();
+  await page.route("**/api/chat", async (route) => {
+    const body = route.request().postDataJSON();
+    const first = body.attempt === 0;
+    await route.fulfill({ json: { evaluation: { ...question, questionId: body.questionId, answer: body.answer, score: first ? 55 : 85, verdict: first ? "partial" : "acceptable", feedback: first ? "State a specific minimum." : "Your minimum is now clear.", demonstrated: [], missing: first ? ["A specific minimum"] : [], needsFollowUp: first, followUpQuestion: first ? "What is your personal minimum?" : null, scored: true } } });
+  });
+  await page.getByRole("button", { name: "Score answer", exact: true }).click();
+  const feedback = page.getByRole("region", { name: "Feedback on question 1", exact: true });
+  await expect(feedback.getByText("55/100", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What is your personal minimum?", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(feedback.getByText("55/100", { exact: true })).toBeVisible();
+  await page.getByLabel("Your answer", { exact: true }).fill("I would set a conservative ceiling minimum and divert early.");
+  await page.getByRole("button", { name: "Score answer", exact: true }).click();
+  await expect(feedback.getByText("85/100", { exact: true })).toBeVisible();
+  await expect(feedback.getByText("55/100", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Explain your next decision 2.", exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).entries.map((entry: { evaluation: { score: number } }) => entry.evaluation.score), storageKey)).toEqual([85]);
+});
+
+test("an unscored answer is labelled without a numeric score beside the next question", async ({ page }) => {
+  await seedOral(page);
+  await page.route("**/api/chat", async (route) => route.fulfill({ status: 503, json: { error: "Scoring is temporarily unavailable." } }));
+  await page.getByRole("button", { name: "Score answer", exact: true }).click();
+  await page.getByRole("button", { name: "Continue without score", exact: true }).click();
+  const feedback = page.getByRole("region", { name: "Feedback on question 1", exact: true });
+  await expect(feedback.getByText("Not scored", { exact: true })).toBeVisible();
+  await expect(feedback.getByText("0/100", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Explain your next decision 2.", exact: true })).toBeVisible();
+});
+
+test("study navigation remains available in active practice and oral sessions", async ({ page }, testInfo) => {
+  const navigation = page.getByRole("navigation", { name: "Study navigation", exact: true });
+  const openNavigation = async () => {
+    if (testInfo.project.name === "mobile-chromium") await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+    await expect(navigation).toBeVisible();
+  };
+  await page.goto("/practice?autostart=true&questionIds=q1&count=1");
+  await expect(page.getByText("Question 1 of 1", { exact: true })).toBeVisible();
+  await openNavigation();
+  await navigation.getByRole("link", { name: "AI Oral Examiner", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Begin oral practice", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Begin oral practice", exact: true }).click();
+  await expect(page.getByLabel("Your answer", { exact: true })).toBeVisible();
+  await openNavigation();
+  await navigation.getByRole("link", { name: "Practice Questions", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Practice Questions", exact: true })).toBeVisible();
 });
 
 test("complete oral entries recover a missing scorecard", async ({ page }) => {

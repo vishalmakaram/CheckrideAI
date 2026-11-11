@@ -342,11 +342,11 @@ function PracticeQuizContent() {
 
   // Quiz Screen
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden bg-slate-50 md:h-screen md:flex-row">
 
       {/* Question Sidebar */}
       {questionNavOpen ? (
-        <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-white">
+        <aside className="flex max-h-52 w-full shrink-0 flex-col border-b border-slate-200 bg-white md:max-h-none md:w-56 md:border-b-0 md:border-r">
           <div className="flex items-start justify-between border-b border-slate-200 p-4">
             <div>
               <p className="text-xs font-bold uppercase text-slate-400">Questions</p>
@@ -354,7 +354,7 @@ function PracticeQuizContent() {
             </div>
             <button type="button" onClick={() => setQuestionNavOpen(false)} aria-label="Hide question navigator" title="Hide question navigator" className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-950"><PanelLeftClose size={17} /></button>
           </div>
-          <div className="grid grid-cols-5 gap-1.5 overflow-y-auto p-3">
+          <div className="grid grid-cols-8 gap-1.5 overflow-y-auto p-3 sm:grid-cols-10 md:grid-cols-5">
             {questions.map((q, i) => {
               const answered = answers[i] !== undefined;
               const correct = answers[i] === q.correct_answer;
@@ -371,16 +371,16 @@ function PracticeQuizContent() {
           </div>
         </aside>
       ) : (
-        <div className="shrink-0 border-r border-slate-200 bg-white p-2">
+        <div className="shrink-0 border-b border-slate-200 bg-white p-2 md:border-b-0 md:border-r">
           <button type="button" onClick={() => setQuestionNavOpen(true)} aria-label="Show question navigator" title="Show question navigator" className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-950"><PanelLeftOpen size={18} /></button>
         </div>
       )}
 
       {/* Main Quiz Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">
         <div className="w-full max-w-3xl mx-auto">
 
-          <div className="flex justify-between items-end mb-8">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Practice Questions</h1>
               <p className="text-slate-500 mt-0.5 text-sm">{selectedCategories.join(", ")}</p>
@@ -400,7 +400,7 @@ function PracticeQuizContent() {
             </div>
           </div>
 
-          <div className="relative w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-8">
+          <div className="relative w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-4 sm:p-8">
             <span className="rounded-md bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-800">
               {question.category}
             </span>
@@ -462,7 +462,7 @@ function PracticeQuizContent() {
           </div>
 
           {/* Navigation */}
-          <div className="flex justify-between mt-6">
+          <div className="mt-6 flex flex-wrap justify-between gap-3">
             <button
               onClick={() => setCurrentIndex((i) => i - 1)}
               disabled={currentIndex === 0}
@@ -471,7 +471,7 @@ function PracticeQuizContent() {
               Previous
             </button>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {allAnswered && (
                 <button
                   onClick={handleFinish}
@@ -499,7 +499,7 @@ function PracticeQuizContent() {
 export default function PracticeQuiz() {
   const { user } = useAuthState();
   return (
-    <ProtectedAppShell focus>
+    <ProtectedAppShell>
       <Suspense fallback={<div className="mx-auto max-w-4xl p-8"><Skeleton className="h-7 w-48" /><div className="mt-8 border-y border-slate-300 py-2"><ListSkeleton rows={6} /></div></div>}>
         <PracticeQuizContent key={user?.id} />
       </Suspense>
