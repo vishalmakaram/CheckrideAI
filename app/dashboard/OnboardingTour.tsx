@@ -8,12 +8,12 @@ import { isMissingDatabaseColumn } from "@/lib/user-facing-errors";
 const steps = [
   {
     title: "Your study picture",
-    description: "The dashboard turns your completed sessions into score trends, category mastery, and a short list of what to review next.",
+    description: "Start with your study recommendations and today's plan. Your average practice and exam scores give you a quick progress check.",
     icon: BarChart3,
   },
   {
     title: "Practice where it matters",
-    description: "Build focused question sets by category. Your results feed the mastery chart and spaced-repetition suggestions.",
+    description: "Build focused question sets by category. Your results update your study recommendations and daily review plan.",
     icon: BookOpenCheck,
   },
   {

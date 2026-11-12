@@ -12,6 +12,26 @@ export default function Sidebar() {
   const { user } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+
+  async function signOut() {
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        // Supabase may clear this browser's session even if remote sign-out fails.
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || data.session) throw error;
+      }
+      // Start a new document so cached authenticated routes cannot intercept login.
+      window.location.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    } catch {
+      setSignOutError("Could not sign you out. Please try again.");
+      setSigningOut(false);
+    }
+  }
 
   const isActive = (href: string) => pathname === href;
   const linkClass = (href: string) =>
@@ -94,11 +114,13 @@ export default function Sidebar() {
       <div className="px-6 py-4 border-t border-white/5">
         <p className="truncate text-xs text-slate-500">{user.email}</p>
         <button
-          onClick={() => supabase.auth.signOut()}
-          className="mt-2 text-xs font-medium text-slate-600 transition hover:text-white"
+          onClick={signOut}
+          disabled={signingOut}
+          className="mt-2 text-xs font-medium text-slate-400 transition hover:text-white disabled:cursor-wait disabled:opacity-50"
         >
-          Sign out
+          {signingOut ? "Signing out..." : "Sign out"}
         </button>
+        {signOutError && <p role="alert" className="mt-2 text-xs text-rose-300">{signOutError}</p>}
         <div className="mt-4"><LegalFooter dark /></div>
       </div>
     </nav>

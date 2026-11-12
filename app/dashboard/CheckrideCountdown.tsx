@@ -23,18 +23,13 @@ export default function CheckrideCountdown({ userId }: { userId: string }) {
   const days = daysUntilDate(date);
 
   return (
-    <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-5 py-4">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Study configuration</p>
-        <p className="mt-1 text-sm font-semibold text-slate-900">{aircraft}</p>
+    <section aria-label="Study configuration" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/80 py-5 text-xs">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="font-medium text-slate-700">{aircraft}</p>
+        <span aria-hidden="true" className="hidden h-3 w-px bg-slate-300 sm:block" />
+        <p className="text-slate-500">Checkride <span className="font-medium text-slate-700">{days === null ? "date not set" : days < 0 ? "— update date" : `in ${days} day${days === 1 ? "" : "s"}`}</span></p>
       </div>
-      <div className="flex items-center gap-5">
-        <div className="text-right">
-          <p className="text-xs text-slate-400">Checkride</p>
-          <p className="mt-1 text-sm font-bold text-slate-900">{days === null ? "Date not set" : days < 0 ? "Update date" : `${days} day${days === 1 ? "" : "s"}`}</p>
-        </div>
-        <Link href="/profile" className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-950">Edit profile</Link>
-      </div>
+      <Link href="/profile" className="py-1 font-medium text-slate-500 hover:text-slate-900 hover:underline">Edit profile</Link>
     </section>
   );
 }

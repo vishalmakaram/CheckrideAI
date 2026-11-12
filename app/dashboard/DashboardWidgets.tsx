@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import type { CategoryStat, OralSessionRow, RepetitionItem, ScorePoint } from "./types";
+import type { CategoryStat, OralSessionRow, ScorePoint } from "./types";
 
 export function AnimatedDial({ percentage, label, color, count }: {
   percentage: number;
@@ -22,15 +21,16 @@ export function AnimatedDial({ percentage, label, color, count }: {
   const fillLength = animated ? trackLength * (percentage / 100) : 0;
 
   return (
-    <div className="flex flex-1 flex-col items-center rounded-lg border border-slate-200 bg-white p-8">
-      <svg width="140" height="130" viewBox="0 0 140 130" aria-label={`${label}: ${count ? `${Math.round(percentage)} percent` : "no data"}`}>
+    <div className="flex min-w-0 items-center gap-2 py-2 first:pr-3 last:pl-3 sm:gap-4 sm:first:pr-8 sm:last:pl-8">
+      <svg width="140" height="130" className="h-auto w-20 shrink-0 sm:w-24" viewBox="0 0 140 130" aria-label={`${label}: ${count ? `${Math.round(percentage)} percent` : "no data"}`}>
         <circle cx="70" cy="75" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="8" strokeDasharray={`${trackLength} ${circumference - trackLength}`} strokeLinecap="round" style={{ transform: "rotate(135deg)", transformOrigin: "70px 75px" }} />
         <circle cx="70" cy="75" r={radius} fill="none" stroke={color} strokeWidth="8" strokeDasharray={`${fillLength} ${circumference}`} strokeLinecap="round" style={{ transform: "rotate(135deg)", transformOrigin: "70px 75px", transition: "stroke-dasharray 1.5s cubic-bezier(0.4, 0, 0.2, 1)" }} />
-        <text x="70" y="71" textAnchor="middle" style={{ fontSize: "22px", fontWeight: 700, fill: "#0f172a" }}>{count === 0 ? "--" : `${Math.round(percentage)}%`}</text>
-        <text x="70" y="89" textAnchor="middle" style={{ fontSize: "10px", fill: "#94a3b8", fontWeight: 500 }}>{count === 0 ? "no data yet" : "AVG SCORE"}</text>
+        <text x="70" y="80" textAnchor="middle" style={{ fontSize: "28px", fontWeight: 600, fill: "#0f172a" }}>{count === 0 ? "--" : `${Math.round(percentage)}%`}</text>
       </svg>
-      <p className="mt-1 text-sm font-semibold text-slate-700">{label}</p>
-      <p className="mt-0.5 text-xs text-slate-400">{count} session{count !== 1 ? "s" : ""}</p>
+      <div className="min-w-0">
+        <p className="text-xs font-medium leading-5 text-slate-700 sm:text-sm">{label}</p>
+        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">{count ? `${count} session${count !== 1 ? "s" : ""}` : "No sessions yet"}</p>
+      </div>
     </div>
   );
 }
@@ -46,11 +46,11 @@ export function CategoryBar({ stat }: { stat: CategoryStat }) {
   const label = stat.percentage >= 90 ? "Strong" : stat.percentage >= 80 ? "Good" : stat.percentage >= 70 ? "Needs work" : "Weak";
 
   return (
-    <div className="flex items-center gap-4 py-3">
-      <div className="w-44 shrink-0"><p className="truncate text-sm font-medium text-slate-800">{stat.category}</p><p className="text-xs text-slate-400">{stat.total} answered</p></div>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-2 rounded-full transition-colors duration-1000" style={{ width: animated ? `${stat.percentage}%` : "0%", backgroundColor: color }} /></div>
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2 py-3 sm:flex sm:gap-4">
+      <div className="min-w-0 sm:w-44 sm:shrink-0"><p className="truncate text-sm font-medium text-slate-800">{stat.category}</p><p className="text-xs text-slate-400">{stat.total} answered</p></div>
+      <div className="order-last col-span-2 h-2 overflow-hidden rounded-full bg-slate-100 sm:order-none sm:flex-1"><div className="h-2 rounded-full transition-colors duration-1000" style={{ width: animated ? `${stat.percentage}%` : "0%", backgroundColor: color }} /></div>
       <span className="w-10 text-right text-sm font-semibold" style={{ color }}>{Math.round(stat.percentage)}%</span>
-      <span className="w-24 text-right text-xs font-medium text-slate-500">{label}</span>
+      <span className="hidden w-24 text-right text-xs font-medium text-slate-500 sm:block">{label}</span>
     </div>
   );
 }
@@ -82,17 +82,6 @@ export function ScoreOverTimeChart({ points }: { points: ScorePoint[] }) {
 
 function EmptyChart({ title, detail }: { title: string; detail: string }) {
   return <div className="rounded-lg border border-slate-200 bg-white p-6"><h2 className="text-base font-semibold text-slate-900">{title}</h2><p className="mt-0.5 text-xs text-slate-400">{detail}</p><div className="mt-8 flex h-40 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">Not enough history yet</div></div>;
-}
-
-export function CategoryMasteryTrend({ stats }: { stats: CategoryStat[] }) {
-  const displayStats = [...stats].sort((a, b) => b.percentage - a.percentage).slice(0, 6);
-  if (!displayStats.length) return <EmptyChart title="Category Mastery Trend" detail="Complete questions to build mastery data." />;
-
-  return <div className="rounded-lg border border-slate-200 bg-white p-6"><h2 className="text-base font-semibold text-slate-900">Category Mastery Trend</h2><p className="mt-0.5 text-xs text-slate-400">Current mastery based on question history</p><div className="mt-5 space-y-4">{displayStats.map((stat) => <div key={stat.category}><div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="truncate font-medium text-slate-700">{stat.category}</span><span className="font-semibold text-slate-500">{Math.round(stat.percentage)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-2 rounded-full bg-emerald-700" style={{ width: `${Math.min(100, stat.percentage)}%` }} /></div></div>)}</div></div>;
-}
-
-export function SpacedRepetitionQueue({ queue }: { queue: RepetitionItem[] }) {
-  return <div className="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white"><div className="border-b border-slate-100 px-6 py-5"><h2 className="text-base font-semibold text-slate-900">Suggested Spaced Repetition Queue</h2><p className="mt-0.5 text-xs text-slate-400">Prioritized categories based on score and practice volume</p></div>{queue.length === 0 ? <div className="p-10 text-center text-sm text-slate-400">Complete a practice session to generate suggestions.</div> : <div className="grid gap-3 p-6 sm:grid-cols-2">{queue.map((item) => <Link key={item.category} href={`/practice?categories=${encodeURIComponent(item.category)}&autostart=true`} className="rounded-lg border border-slate-200 p-4 transition-colors hover:border-emerald-400 hover:bg-emerald-50"><div className="flex justify-between gap-3"><p className="text-sm font-semibold text-slate-800">{item.category}</p><span className="text-xs font-semibold text-emerald-800">{Math.round(item.percentage)}%</span></div><p className="mt-2 text-xs text-slate-500">{item.reason}</p><p className="mt-3 text-xs font-semibold text-emerald-700">Start focused set</p></Link>)}</div>}</div>;
 }
 
 export function OralSessionHistory({ sessions, formatDate }: { sessions: OralSessionRow[]; formatDate: (iso: string) => string }) {

@@ -25,6 +25,43 @@ async function seedOral(page: Page, mode: "beginner" | "intermediate" | "checkri
   await page.reload();
 }
 
+for (const path of ["/dashboard", "/practice"]) {
+  test(`sign-in recovery from ${path} works after another tab signs out`, async ({ page, context }) => {
+    await context.route("**/auth/v1/logout*", (route) => route.fulfill({ status: 204 }));
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true }).or(page.getByRole("heading", { name: "Practice Questions", exact: true }))).toBeVisible();
+
+    const otherTab = await context.newPage();
+    await otherTab.goto("/dashboard");
+    await expect(otherTab.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+    const navigationToggle = otherTab.getByRole("button", { name: "Open navigation", exact: true });
+    if (await navigationToggle.isVisible()) await navigationToggle.click();
+    await otherTab.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(otherTab.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
+
+    const freshLoginRequest = page.waitForRequest((request) => request.isNavigationRequest() && request.resourceType() === "document" && new URL(request.url()).pathname === "/login");
+    await page.getByRole("link", { name: "Go to sign in" }).click();
+    await freshLoginRequest;
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("next") ?? "/dashboard").toBe(path);
+    await expect(page.getByLabel("Email", { exact: true })).toBeEditable();
+  });
+}
+
+test("a remote sign-out failure still opens login when the local session was cleared", async ({ page }) => {
+  await page.route("**/auth/v1/logout*", (route) => route.fulfill({ status: 400, json: { code: "bad_request", message: "Sign out unavailable" } }));
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  const navigationToggle = page.getByRole("button", { name: "Open navigation", exact: true });
+  if (await navigationToggle.isVisible()) await navigationToggle.click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?next=%2Fdashboard/);
+});
+
 test("daily plan starts a focused practice set", async ({ page }, testInfo) => {
   await page.goto("/dashboard");
   const plan = page.getByRole("region", { name: "Today's study plan" });

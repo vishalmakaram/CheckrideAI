@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import { useAuthState } from "./AuthProvider";
@@ -35,12 +34,13 @@ export default function ProtectedAppShell({
           <p className="mt-2 text-sm leading-6 text-slate-500">
             Your practice history, oral sessions, and checklist are saved to your account.
           </p>
-          <Link
+          {/* Cross the auth boundary with a fresh request, not a cached login redirect. */}
+          <a
             href={`/login${next}`}
             className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
           >
             Go to sign in
-          </Link>
+          </a>
         </div>
       </div>
     );

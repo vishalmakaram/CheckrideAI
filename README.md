@@ -100,4 +100,4 @@ tests/
 proxy.ts             Session refresh and protected-route boundary
 ```
 
-The dashboard is divided into focused widgets and shared types so data coordination, analytics, and presentation can evolve independently.
+The dashboard uses a compact average-score strip and an open study-recommendation list beside a lightly tinted daily plan on wide screens; these stack on mobile. Charts, category performance, and session history are available under the collapsed “Progress details & session history” section.
